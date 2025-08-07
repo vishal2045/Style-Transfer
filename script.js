@@ -3,17 +3,17 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, on
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-analytics.js";
 import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
-// Firebase configuration
-// const firebaseConfig = {
-//     apiKey: "YOUR_API_KEY_HERE",
-//     authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-//     projectId: "YOUR_PROJECT_ID",
-//     storageBucket: "YOUR_PROJECT_ID.appspot.com",
-//     messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-//     appId: "YOUR_APP_ID",
-//     measurementId: "YOUR_MEASUREMENT_ID",
-//     databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com"
-// };
+// Firebase configuration - reads from environment or uses development config
+const firebaseConfig = window.ENV?.FIREBASE_CONFIG || {
+    apiKey: "development-api-key",
+    authDomain: "your-project.firebaseapp.com",
+    projectId: "your-project-id", 
+    storageBucket: "your-project.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef",
+    measurementId: "G-XXXXXXX",
+    databaseURL: "https://your-project-default-rtdb.firebaseio.com"
+};
 
 
 // Initialize Firebase

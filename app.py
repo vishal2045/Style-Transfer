@@ -30,6 +30,26 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
+# Environment-based configuration endpoint
+@app.get("/config/firebase")
+async def get_firebase_config():
+    """
+    Serve Firebase configuration based on environment variables
+    This endpoint provides Firebase config for the frontend
+    """
+    firebase_config = {
+        "apiKey": os.getenv("FIREBASE_API_KEY", "development-api-key"),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", "your-project.firebaseapp.com"),
+        "projectId": os.getenv("FIREBASE_PROJECT_ID", "your-project-id"),
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "your-project.appspot.com"),
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", "123456789"),
+        "appId": os.getenv("FIREBASE_APP_ID", "1:123456789:web:abcdef"),
+        "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID", "G-XXXXXXX"),
+        "databaseURL": os.getenv("FIREBASE_DATABASE_URL", "https://your-project-default-rtdb.firebaseio.com")
+    }
+    
+    return JSONResponse(content={"firebase": firebase_config})
+
 # Logging setup
 def setup_logging():
     os.makedirs('logs', exist_ok=True)
@@ -61,6 +81,12 @@ for folder in [UPLOAD_FOLDER, STYLE_FOLDER, OUTPUT_FOLDER]:
 
 # Mount static directories
 app.mount("/outputs", StaticFiles(directory=OUTPUT_FOLDER), name="outputs")
+app.mount("/static", StaticFiles(directory="."), name="static")
+
+# Serve index.html at root
+@app.get("/")
+async def serve_index():
+    return FileResponse("index.html")
 
 # Initialize database
 db = TinyDB('users.json')
