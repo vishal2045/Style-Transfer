@@ -1,29 +1,24 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-analytics.js";
-import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
 // Firebase configuration - reads from environment or uses development config
 const firebaseConfig = window.ENV?.FIREBASE_CONFIG || {
     apiKey: "development-api-key",
     authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project-id", 
+    projectId: "your-project-id",
     storageBucket: "your-project.appspot.com",
     messagingSenderId: "123456789",
     appId: "1:123456789:web:abcdef",
-    measurementId: "G-XXXXXXX",
-    databaseURL: "https://your-project-default-rtdb.firebaseio.com"
+    measurementId: "G-XXXXXXX"
 };
 
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const analytics = getAnalytics(app);
-const database = getDatabase(app);
 
 // Make handleLogout available globally
-window.handleLogout = async function() {
+window.handleLogout = async function () {
     try {
         await signOut(auth);
         window.location.href = 'index.html';
@@ -33,30 +28,7 @@ window.handleLogout = async function() {
     }
 };
 
-// Greetings in various Indian languages
-const greetings = [
-    { text: "नमस्ते", language: "Hindi" },
-    { text: "வணக்கம்", language: "Tamil" },
-    { text: "नमस्कार", language: "Marathi" },
-    { text: "કેમ છો", language: "Gujarati" },
-    { text: "নমস্কার", language: "Bengali" },
-    { text: "ನಮಸ್ಕಾರ", language: "Kannada" },
-    { text: "നമസ്കാരം", language: "Malayalam" },
-    { text: "ਸਤ ਸ੍ਰੀ ਅਕਾਲ", language: "Punjabi" },
-    { text: "नमस्कार", language: "Odia" },
-    { text: "నమస్కారం", language: "Telugu" },
-    { text: "Hello", language: "English" }
-];
 
-// Function to update greeting
-function updateGreeting() {
-    const greetingElement = document.getElementById('greeting');
-    if (greetingElement) {
-        const greeting = greetings[currentIndex];
-        greetingElement.textContent = greeting.text;
-        currentIndex = (currentIndex + 1) % greetings.length;
-    }
-}
 
 // Function to check if user exists
 async function checkUserExists(email) {
@@ -80,7 +52,7 @@ async function checkUserExists(email) {
 async function handleRegistration(name, email, password) {
     try {
         console.log('Starting registration process...');
-        
+
         // First check if user exists in backend
         console.log('Checking if user exists in backend...');
         const userExists = await checkUserExists(email);
@@ -91,7 +63,7 @@ async function handleRegistration(name, email, password) {
                 message: "This email is already registered. Please try logging in instead."
             };
         }
-        
+
         // Then register with Firebase
         console.log('Registering with Firebase...');
         let userCredential;
@@ -107,10 +79,10 @@ async function handleRegistration(name, email, password) {
             }
             throw firebaseError;
         }
-        
+
         const user = userCredential.user;
         console.log('Firebase registration successful, user:', user.uid);
-        
+
         // Update user profile with name
         console.log('Updating user profile with name...');
         await updateProfile(user, {
@@ -136,7 +108,7 @@ async function handleRegistration(name, email, password) {
         if (!response.ok) {
             const errorData = await response.json();
             console.error('Backend registration failed:', errorData);
-            
+
             // Only clean up Firebase if the error is not "email already registered"
             if (errorData.detail !== '400: Email already registered') {
                 console.log('Cleaning up Firebase registration...');
@@ -149,15 +121,15 @@ async function handleRegistration(name, email, password) {
             } else {
                 console.log('Email already registered in backend, keeping Firebase account');
             }
-            
+
             throw new Error(errorData.detail || 'Registration failed');
         }
 
         const backendResponse = await response.json();
         console.log('Backend registration successful:', backendResponse);
-        
-        return { 
-            success: true, 
+
+        return {
+            success: true,
             message: "Registration successful! You can now log in.",
             user: {
                 name: name,
@@ -168,16 +140,16 @@ async function handleRegistration(name, email, password) {
         };
     } catch (error) {
         console.error('Registration error:', error);
-        
+
         // Handle specific Firebase errors
         if (error.code === 'auth/email-already-in-use') {
             console.log('Email already in use in Firebase');
-            return { 
-                success: false, 
+            return {
+                success: false,
                 message: "This email is already registered. Please try logging in instead."
             };
         }
-        
+
         if (error.code === 'auth/weak-password') {
             console.log('Weak password detected');
             return {
@@ -185,7 +157,7 @@ async function handleRegistration(name, email, password) {
                 message: "Password is too weak. Please use a stronger password."
             };
         }
-        
+
         if (error.code === 'auth/invalid-email') {
             console.log('Invalid email format');
             return {
@@ -193,7 +165,7 @@ async function handleRegistration(name, email, password) {
                 message: "Invalid email address. Please enter a valid email."
             };
         }
-        
+
         // Handle backend "email already registered" error
         if (error.message === '400: Email already registered') {
             return {
@@ -201,9 +173,9 @@ async function handleRegistration(name, email, password) {
                 message: "This email is already registered. Please try logging in instead."
             };
         }
-        
-        return { 
-            success: false, 
+
+        return {
+            success: false,
             message: error.message || "Registration failed. Please try again."
         };
     }
@@ -235,56 +207,19 @@ async function updateUserInfo(user) {
     }
 }
 
-// Function to add transformed image to user's history
-async function addTransformedImage(userEmail, imagePath, styleName) {
-    try {
-        // Save to backend
-        const response = await fetch('http://127.0.0.1:5000/api/add-transformed-image', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                email: userEmail,
-                image_path: imagePath,
-                style_name: styleName,
-                transformed_at: new Date().toISOString()
-            })
-        });
 
-        if (!response.ok) {
-            throw new Error('Failed to add transformed image to backend');
-        }
-
-        // Save to Firebase
-        const user = auth.currentUser;
-        if (user) {
-            const userRef = ref(database, `users/${user.uid}/transformed_images`);
-            const newImageRef = push(userRef);
-            await set(newImageRef, {
-                image_path: imagePath,
-                style_name: styleName,
-                transformed_at: new Date().toISOString()
-            });
-        }
-
-        console.log('Transformed image added to history');
-    } catch (error) {
-        console.error('Error adding transformed image:', error);
-    }
-}
 
 // Function to handle login
 async function handleLogin(email, password) {
     try {
         console.log('Starting login process...');
-        
+
         // First, login with Firebase
         console.log('Logging in with Firebase...');
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         console.log('Firebase login successful, user:', user.uid);
-        
+
         // Store user info in sessionStorage immediately after Firebase login
         const userInfo = {
             name: user.displayName,
@@ -293,7 +228,7 @@ async function handleLogin(email, password) {
         };
         console.log('Storing initial user info in sessionStorage');
         sessionStorage.setItem('user', JSON.stringify(userInfo));
-        
+
         // Check if backend is available
         console.log('Attempting backend login...');
         try {
@@ -314,8 +249,8 @@ async function handleLogin(email, password) {
                 console.error('Backend login failed:', errorData);
                 // Even if backend fails, we still have Firebase auth
                 console.log('Continuing with Firebase auth only');
-                return { 
-                    success: true, 
+                return {
+                    success: true,
                     message: "Logged in with Firebase (Backend temporarily unavailable)",
                     user: userInfo
                 };
@@ -323,11 +258,11 @@ async function handleLogin(email, password) {
 
             const backendResponse = await response.json();
             console.log('Backend login successful');
-            
+
             // Update user information
             console.log('Updating user information...');
             await updateUserInfo(user);
-            
+
             // Update session storage with backend data
             const updatedUserInfo = {
                 ...userInfo,
@@ -335,9 +270,9 @@ async function handleLogin(email, password) {
             };
             console.log('Updating session storage with backend data');
             sessionStorage.setItem('user', JSON.stringify(updatedUserInfo));
-            
-            return { 
-                success: true, 
+
+            return {
+                success: true,
                 message: backendResponse.message,
                 user: updatedUserInfo
             };
@@ -355,13 +290,13 @@ async function handleLogin(email, password) {
         console.error('Login error:', error);
         if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
             console.log('Invalid credentials');
-            return { 
-                success: false, 
+            return {
+                success: false,
                 message: "Invalid email or password. Please try again."
             };
         }
-        return { 
-            success: false, 
+        return {
+            success: false,
             message: error.message || "Login failed. Please try again."
         };
     }
@@ -376,11 +311,7 @@ const nameField = document.getElementById('name')?.parentElement;
 const authForm = document.getElementById('authForm');
 
 // Initialize greeting rotation
-let currentIndex = 0;
-if (document.getElementById('greeting')) {
-    updateGreeting();
-    setInterval(updateGreeting, 1000);
-}
+
 
 // Toggle between login and signup modes
 if (loginModeToggle) {
@@ -405,37 +336,37 @@ if (loginModeToggle) {
 if (authForm) {
     authForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
         const name = document.getElementById('name').value;
         const isLoginMode = loginModeToggle.checked;
-        
+
         // Basic validation
         if (!email || !password || (!isLoginMode && !name)) {
             alert('Please fill in all required fields');
             return;
         }
-        
+
         // Email format validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             alert('Please enter a valid email address');
             return;
         }
-        
+
         try {
             // Show loading state
             submitButton.disabled = true;
             submitButton.textContent = isLoginMode ? 'Logging in...' : 'Signing up...';
-            
+
             let result;
             if (isLoginMode) {
                 result = await handleLogin(email, password);
             } else {
                 result = await handleRegistration(name, email, password);
             }
-            
+
             if (result.success) {
                 // Store user info in sessionStorage
                 sessionStorage.setItem('user', JSON.stringify(result.user));
@@ -479,11 +410,11 @@ function checkAuth() {
                     window.location.href = 'index.html';
                     return;
                 }
-                
+
                 // Update user name in dashboard
                 const userNameElement = document.getElementById('userName');
                 const welcomeNameElement = document.getElementById('welcomeName');
-                
+
                 if (userNameElement) {
                     userNameElement.textContent = user.displayName || 'User';
                 }
@@ -499,14 +430,14 @@ function checkAuth() {
                 };
                 console.log('Storing user info in sessionStorage:', userInfo);
                 sessionStorage.setItem('user', JSON.stringify(userInfo));
-                
+
                 resolve(user);
             } catch (error) {
                 console.error('Error updating user data:', error);
                 reject(error);
             }
         });
-        
+
         // Cleanup subscription after 10 seconds to prevent hanging
         setTimeout(() => {
             unsubscribe();
@@ -689,14 +620,14 @@ function handleStyleFile(file) {
                 <span>Your uploaded style</span>
             </div>
         `;
-        
+
         // Clear previous options and add new one
         if (customStyleOptions) {
             customStyleOptions.innerHTML = '';
             customStyleOptions.appendChild(styleItem);
             customStyleOptions.style.display = 'grid';
         }
-        
+
         // Update selected style
         selectedStyle = {
             id: 'custom',
@@ -704,7 +635,7 @@ function handleStyleFile(file) {
             image: e.target.result,
             description: 'Your custom style'
         };
-        
+
         // Enable transform button if target image is uploaded
         updateTransformButton();
     };
@@ -739,7 +670,7 @@ function initializeTargetImageUpload() {
             if (e.target.files.length > 0) {
                 const file = e.target.files[0];
                 const targetPreview = document.getElementById('targetPreview');
-                
+
                 // Show preview
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -747,7 +678,7 @@ function initializeTargetImageUpload() {
                     targetPreview.classList.remove('empty');
                     targetImage = e.target.result;
                     console.log('Target image loaded successfully');
-                    
+
                     // Enable transform button if style is selected
                     updateTransformButton();
                 };
@@ -782,7 +713,7 @@ function initializeTargetImageUpload() {
             if (files.length > 0) {
                 const file = files[0];
                 const targetPreview = document.getElementById('targetPreview');
-                
+
                 // Show preview
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -790,7 +721,7 @@ function initializeTargetImageUpload() {
                     targetPreview.classList.remove('empty');
                     targetImage = e.target.result;
                     console.log('Target image loaded successfully');
-                    
+
                     // Enable transform button if style is selected
                     updateTransformButton();
                 };
@@ -817,7 +748,7 @@ function updateTransformButton() {
 // Add transform button click handler
 document.getElementById('transformBtn')?.addEventListener('click', async (e) => {
     e.preventDefault();
-    
+
     if (!targetImage || !selectedStyle) {
         showError('Please select both a target image and a style');
         return;
@@ -866,30 +797,30 @@ async function transferStyle(contentFile, styleFile) {
 
         // Connect to WebSocket for progress updates
         const ws = new WebSocket(`ws://127.0.0.1:5000/ws/${clientId}`);
-        
-        ws.onmessage = function(event) {
+
+        ws.onmessage = function (event) {
             const data = JSON.parse(event.data);
-            
+
             if (data.completed) {
                 // Hide loading overlay
                 if (loadingOverlay) {
                     loadingOverlay.style.display = 'none';
                 }
-                
+
                 // Reset transform button
                 transformBtn.innerHTML = originalButtonText;
                 transformBtn.disabled = false;
-                
+
                 // Show the transformed image
                 const resultImage = document.getElementById('resultImage');
                 if (resultImage) {
                     resultImage.src = data.image_data.path;
                     resultImage.style.display = 'block';
                 }
-                
+
                 // Add the new image to gallery immediately
                 addImageToGallery(data.image_data);
-                
+
                 // Reload gallery to ensure all images are shown
                 loadGallery();
             } else {
@@ -923,7 +854,7 @@ async function transferStyle(contentFile, styleFile) {
     } catch (error) {
         console.error('Error during style transfer:', error);
         showError('Failed to transform image. Please try again.');
-        
+
         // Reset UI state
         const transformBtn = document.getElementById('transformBtn');
         if (transformBtn) {
@@ -949,17 +880,17 @@ function addImageToGallery(imageData) {
 function createGalleryItem(imageData) {
     const item = document.createElement('div');
     item.className = 'gallery-item';
-    
+
     // Ensure we have valid timestamps
     const timestamp = imageData.transformed_at || imageData.timestamp || new Date().toISOString();
     const date = new Date(timestamp);
     const formattedDate = date.toLocaleDateString();
     const formattedTime = date.toLocaleTimeString();
-    
+
     // Ensure we have valid paths
     const imagePath = imageData.thumbnail_path || imageData.path || '';
     const filename = imageData.original_filename || imageData.filename || 'Untitled';
-    
+
     item.innerHTML = `
         <img src="${imagePath}" alt="${filename}" loading="lazy" onerror="this.src='placeholder.jpg'">
         <div class="gallery-item-info">
@@ -978,7 +909,7 @@ function createGalleryItem(imageData) {
             </div>
         </div>
     `;
-    
+
     return item;
 }
 
@@ -1005,7 +936,7 @@ async function loadGallery() {
 
         const data = await response.json();
         console.log('Gallery data received:', data);
-        
+
         const galleryGrid = document.getElementById('galleryGrid');
         if (!galleryGrid) {
             console.error('Gallery grid element not found');
@@ -1037,7 +968,7 @@ async function loadGallery() {
 
     } catch (error) {
         console.error('Error loading gallery:', error);
-        
+
         // Show specific error messages based on error type
         if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
             showError('Failed to connect to server. Please check if the server is running.');
@@ -1065,7 +996,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.location.href = 'index.html';
             }
         });
-        
+
         // Cleanup listener after 10 seconds
         setTimeout(() => {
             unsubscribe();
@@ -1094,7 +1025,7 @@ function updatePagination(pagination) {
 }
 
 // Make functions globally available
-window.deleteImage = async function(filename) {
+window.deleteImage = async function (filename) {
     if (!confirm('Are you sure you want to delete this image?')) return;
 
     try {
@@ -1113,7 +1044,7 @@ window.deleteImage = async function(filename) {
     }
 };
 
-window.downloadImage = async function(imagePath) {
+window.downloadImage = async function (imagePath) {
     try {
         const response = await fetch(imagePath);
         const blob = await response.blob();

@@ -1,21 +1,27 @@
 import os
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from tinydb import TinyDB, Query
 from model import StyleTransferModel
 import logging
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Dict, List
 import uvicorn
 from pydantic import BaseModel
 import json
 import asyncio
-import traceback
 from PIL import Image
+
+# Load environment variables from .env file for local development
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # This will load .env file if it exists
+    print("Loaded environment variables from .env file (local development)")
+except ImportError:
+    print("python-dotenv not installed, using system environment variables")
 
 # App setup
 app = FastAPI()
@@ -40,27 +46,56 @@ async def get_firebase_config(request: Request):
     Security: Firebase client keys are designed to be public.
     Real security comes from Firebase Security Rules and domain restrictions.
     """
-    # Optional: Add origin validation for extra security
+    # Enhanced origin validation for security
     origin = request.headers.get("origin", "")
     referer = request.headers.get("referer", "")
+    host = request.headers.get("host", "")
     
-    # Log access for monitoring (optional)
-    logger.info(f"Firebase config requested from origin: {origin}")
+    # Define allowed domains
+    allowed_domains = [
+        "localhost",
+        "127.0.0.1", 
+        "0.0.0.0",
+        # Add your Render domain here
+        "your-app-name.onrender.com"
+    ]
+    
+    # Validate origin/host
+    is_allowed = any(domain in host for domain in allowed_domains) or \
+                 any(domain in origin for domain in allowed_domains)
+    
+    if not is_allowed:
+        logger.warning(f"Unauthorized Firebase config request from: {origin} (host: {host})")
+        raise HTTPException(status_code=403, detail="Unauthorized domain")
+    
+    # Log access for monitoring
+    logger.info(f"Firebase config requested from origin: {origin}, host: {host}")
+    
+    # Validate required environment variables
+    required_vars = ["FIREBASE_API_KEY", "FIREBASE_AUTH_DOMAIN", "FIREBASE_PROJECT_ID"]
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    
+    if missing_vars:
+        logger.error(f"Missing required Firebase environment variables: {missing_vars}")
+        raise HTTPException(status_code=500, detail="Firebase configuration incomplete")
     
     firebase_config = {
-        "apiKey": os.getenv("FIREBASE_API_KEY", "development-api-key"),
-        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", "your-project.firebaseapp.com"), 
-        "projectId": os.getenv("FIREBASE_PROJECT_ID", "your-project-id"),
-        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "your-project.appspot.com"),
-        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", "123456789"),
-        "appId": os.getenv("FIREBASE_APP_ID", "1:123456789:web:abcdef"),
-        "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID", "G-XXXXXXX"),
-        "databaseURL": os.getenv("FIREBASE_DATABASE_URL", "https://your-project-default-rtdb.firebaseio.com")
+        "apiKey": os.getenv("FIREBASE_API_KEY"),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"), 
+        "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
+        "appId": os.getenv("FIREBASE_APP_ID"),
+        "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID")
     }
     
-    # Add cache headers to reduce repeated requests
+    # Add security headers
     response = JSONResponse(content={"firebase": firebase_config})
     response.headers["Cache-Control"] = "public, max-age=3600"  # Cache for 1 hour
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    
     return response
 
 # Logging setup
@@ -198,17 +233,7 @@ class UserLogin(BaseModel):
     password: str
     uid: str
 
-class ImageMetadata(BaseModel):
-    filename: str
-    original_filename: str
-    path: str
-    thumbnail_path: str
-    timestamp: str
-    style_used: str
-    is_original: bool
-    size: int
-    dimensions: dict
-    tags: List[str] = []
+
 
 # Helper functions for image management
 def create_user_image_directories(email: str):
@@ -405,29 +430,7 @@ async def delete_image(email: str, filename: str):
         logger.error(f"Error deleting image: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/images/{email}/{filename}/tags")
-async def update_image_tags(email: str, filename: str, tags: List[str]):
-    """Update tags for an image"""
-    try:
-        users_data = load_users()
-        user = next((u for u in users_data["users"] if u["email"] == email), None)
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        # Find the image in user's gallery
-        image = next((img for img in user.get("images", []) if img["filename"] == filename), None)
-        if not image:
-            raise HTTPException(status_code=404, detail="Image not found")
-        
-        # Update tags
-        image["tags"] = tags
-        save_users(users_data)
-        
-        return {"message": "Tags updated successfully", "tags": tags}
-    except Exception as e:
-        logger.error(f"Error updating image tags: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/transfer")
 async def transfer_style(
@@ -557,99 +560,11 @@ def save_users(users_data):
     with open('users.json', 'w') as f:
         json.dump(users_data, f, indent=4)
 
-@app.post("/api/update-user")
-async def update_user(user_data: dict):
-    try:
-        logger.info(f"Updating user information for: {user_data['email']}")
-        users_data = load_users()
-        
-        # Find if user exists
-        user_exists = False
-        for user in users_data["users"]:
-            if user["email"] == user_data["email"]:
-                # Update existing user
-                user.update({
-                    "name": user_data["name"],
-                    "uid": user_data["uid"],
-                    "last_login": user_data["last_login"]
-                })
-                user_exists = True
-                logger.info(f"Updated existing user: {user_data['email']}")
-                break
-        
-        # If user doesn't exist, add new user
-        if not user_exists:
-            new_user = {
-                "name": user_data["name"],
-                "email": user_data["email"],
-                "uid": user_data["uid"],
-                "last_login": user_data["last_login"],
-                "transformed_images": []
-            }
-            users_data["users"].append(new_user)
-            logger.info(f"Added new user: {user_data['email']}")
-        
-        # Save updated users data
-        save_users(users_data)
-        return {"message": "User information updated successfully"}
-    except Exception as e:
-        logger.error(f"Error updating user: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/add-transformed-image")
-async def add_transformed_image(image_data: dict):
-    try:
-        logger.info(f"Adding transformed image for user: {image_data['email']}")
-        users_data = load_users()
-        
-        # Find user
-        user_found = False
-        for user in users_data["users"]:
-            if user["email"] == image_data["email"]:
-                # Add transformed image to user's history
-                if "transformed_images" not in user:
-                    user["transformed_images"] = []
-                
-                user["transformed_images"].append({
-                    "image_path": image_data["image_path"],
-                    "style_name": image_data["style_name"],
-                    "transformed_at": image_data["transformed_at"]
-                })
-                
-                user_found = True
-                logger.info(f"Added transformed image for user: {image_data['email']}")
-                break
-        
-        if not user_found:
-            logger.warning(f"User not found: {image_data['email']}")
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        # Save updated users data
-        save_users(users_data)
-        return {"message": "Transformed image added successfully"}
-    except Exception as e:
-        logger.error(f"Error adding transformed image: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/user-history/{email}")
-async def get_user_history(email: str):
-    try:
-        users_data = load_users()
-        
-        # Find user
-        for user in users_data["users"]:
-            if user["email"] == email:
-                return {
-                    "name": user["name"],
-                    "email": user["email"],
-                    "last_login": user["last_login"],
-                    "transformed_images": user.get("transformed_images", [])
-                }
-        
-        raise HTTPException(status_code=404, detail="User not found")
-    except Exception as e:
-        logger.error(f"Error getting user history: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 if __name__ == '__main__':
     try:
