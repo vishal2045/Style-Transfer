@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -17,7 +18,10 @@ import asyncio
 import traceback
 from PIL import Image
 
-# App setup
+# Load environment variables from .env file
+load_dotenv()
+
+# App setup  
 app = FastAPI()
 
 # CORS setup with more specific configuration
